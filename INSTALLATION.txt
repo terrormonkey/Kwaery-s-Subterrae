@@ -1,0 +1,37 @@
+INSTALLATION GUIDE - KWAERY'S SUBTERRAE
+
+Follow these steps to install the extension on Google Chrome, Edge, or Brave.
+
+STEP 1: PREPARE THE FILES
+1. Download the ZIP file containing this extension.
+2. Right-click the ZIP file and select "Extract All..." to unzip it.
+3. Remember the location of the extracted folder (e.g., Desktop/Kwaery's Subterrae).
+
+STEP 2: OPEN EXTENSION SETTINGS
+1. Open your web browser (Chrome/Edge/Brave).
+2. In the address bar at the top, type the following and press Enter:
+   chrome://extensions
+   (or edge://extensions for Microsoft Edge)
+
+STEP 3: ENABLE DEVELOPER MODE
+1. Look for a switch named "Developer mode" in the top right corner of the page.
+2. Click the switch to turn it ON.
+
+STEP 4: INSTALL THE EXTENSION
+1. Click the button labeled "Load unpacked" (top left).
+2. A file selection window will open.
+3. Navigate to the folder you extracted in Step 1.
+4. Select the folder and click "Select Folder".
+
+The extension "Kwaery's Subterrae" should now appear in your list.
+
+STEP 5: PIN TO TOOLBAR (OPTIONAL)
+1. Click the puzzle piece icon (Extensions) in your browser toolbar (top right).
+2. Find "Kwaery's Subterrae".
+3. Click the pin icon next to it to make it always visible.
+
+HOW TO USE
+- Toggle Dark Mode: Press "Shift + X" on your keyboard.
+- Open Menu: Click the extension icon to access Settings and Dimmer.
+- Dimmer: Adjust slider to darken screen brightness.
+- Sites: Specific dimmer settings are saved automatically per website.

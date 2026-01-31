@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <style>
+    body {
+      background-color: #222;
+      color: #eee;
+      font-family: sans-serif;
+      width: 200px;
+      padding: 10px;
+      margin: 0;
+    }
+
+    .menu-item {
+      padding: 10px;
+      border-bottom: 1px solid #444;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .menu-item:last-child {
+      border-bottom: none;
+    }
+
+    .menu-item:hover {
+      background-color: #333;
+    }
+
+    .label {
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .shortcut {
+      font-size: 11px;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Simple Toggle Switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 34px;
+      height: 20px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #555;
+      transition: .4s;
+      border-radius: 20px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+
+    input:checked+.slider {
+      background-color: #4CAF50;
+    }
+
+    input:checked+.slider:before {
+      transform: translateX(14px);
+    }
+
+    /* Slider Customization */
+    input[type=range] {
+      accent-color: white;
+      cursor: pointer;
+    }
+
+    /* Collapsible Theme List */
+    #theme-list {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+    }
+
+    #theme-list.open {
+      max-height: 300px;
+      /* Adjust based on content */
+      overflow-y: auto;
+      padding: 0 10px 10px 10px;
+      border-top: 1px solid #333;
+    }
+
+    /* Dimmer Sites List */
+    #dimmer-sites-list {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+    }
+
+    #dimmer-sites-list.open {
+      max-height: 200px;
+      overflow-y: auto;
+      padding: 0 10px 10px 10px;
+      border-top: 1px solid #333;
+    }
+
+    .dimmer-site-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px;
+      background-color: transparent;
+      border-radius: 4px;
+      font-size: 12px;
+      transition: background-color 0.2s, opacity 0.3s, transform 0.3s;
+    }
+
+    .dimmer-site-item:hover {
+      background-color: #333;
+    }
+
+    .dimmer-site-item.removing {
+      opacity: 0;
+      transform: translateX(20px);
+    }
+
+    .dimmer-site-delete {
+      background: none;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      transition: color 0.2s, background-color 0.2s;
+    }
+
+    .dimmer-site-delete:hover {
+      color: #ff6b6b;
+      background-color: rgba(255, 107, 107, 0.1);
+    }
+
+    /* Easter Egg */
+    .easter-egg {
+      position: fixed;
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      pointer-events: none;
+      animation: fadeOut 2s forwards;
+      z-index: 1000;
+      white-space: nowrap;
+    }
+
+    @keyframes fadeOut {
+      0% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      70% {
+        opacity: 1;
+        transform: translateY(-5px);
+      }
+
+      100% {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="menu-item" id="toggle-item">
+    <div class="toggle-row">
+      <span class="label">Dark Mode</span>
+      <label class="switch">
+        <input type="checkbox" id="toggle-input">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <span class="shortcut">Shift + X</span>
+  </div>
+
+  <div class="menu-item" id="dimmer-section">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <span class="label">Dimmer</span>
+      <span id="dimmer-value" style="font-size: 12px; color: #888;">0%</span>
+    </div>
+    <input type="range" id="dimmer-slider" min="0" max="90" value="0" style="width: 100%; margin-top: 10px;">
+  </div>
+
+  <div class="menu-item" id="themes-section" style="padding: 0;">
+    <div id="themes-header" style="padding: 10px; cursor: pointer;">
+      <span class="label" style="display: block; width: 100%;">Themes (click to select)</span>
+    </div>
+    <div id="theme-list" style="display: flex; flex-direction: column; gap: 5px;">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+
+  <div class="menu-item" id="dimmer-sites-section" style="padding: 0;">
+    <div id="dimmer-sites-header" style="padding: 10px; cursor: pointer;">
+      <span class="label" style="display: block; width: 100%;">Dimmed Sites &#9660;</span>
+    </div>
+    <div id="dimmer-sites-list" style="display: flex; flex-direction: column; gap: 5px;">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+
+  <script src="themes.js"></script>
+  <script src="popup.js"></script>
+</body>
+
+</html>
