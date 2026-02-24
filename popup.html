@@ -2,41 +2,67 @@
 <html>
 
 <head>
+  <meta charset="UTF-8">
   <style>
-    body {
-      background-color: #222;
-      color: #eee;
-      font-family: sans-serif;
-      width: 200px;
-      padding: 10px;
+    /* ── Reset & Base ── */
+    *,
+    *::before,
+    *::after {
       margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
 
+    body {
+      background-color: #000;
+      color: #e8e8e8;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      width: 230px;
+      padding: 8px 8px 2px 8px;
+      margin: 0;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
+
+    /* Hidden scrollbar */
+    body::-webkit-scrollbar {
+      width: 0;
+    }
+
+    /* ── Section Cards ── */
     .menu-item {
-      padding: 10px;
-      border-bottom: 1px solid #444;
-      cursor: pointer;
-      display: flex;
-      flex-direction: column;
+      padding: 14px 14px;
+      border-radius: 10px;
+      background: #0a0a0a;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      margin-bottom: 6px;
+      cursor: default;
+      transition: border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .menu-item:last-child {
-      border-bottom: none;
+      margin-bottom: 0;
     }
 
     .menu-item:hover {
-      background-color: #333;
+      border-color: rgba(255, 255, 255, 0.10);
+      background: #0e0e0e;
     }
 
     .label {
-      font-size: 14px;
-      font-weight: bold;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.015em;
+      color: #fff;
     }
 
     .shortcut {
-      font-size: 11px;
-      color: #888;
-      margin-top: 4px;
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.3);
+      margin-top: 5px;
+      letter-spacing: 0.04em;
+      font-weight: 500;
     }
 
     .toggle-row {
@@ -45,12 +71,12 @@
       align-items: center;
     }
 
-    /* Simple Toggle Switch */
+    /* ── Toggle Switch ── */
     .switch {
       position: relative;
       display: inline-block;
-      width: 34px;
-      height: 20px;
+      width: 38px;
+      height: 22px;
     }
 
     .switch input {
@@ -62,141 +88,351 @@
     .slider {
       position: absolute;
       cursor: pointer;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-color: #555;
-      transition: .4s;
-      border-radius: 20px;
+      inset: 0;
+      background-color: #222;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+        border-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+        box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      border-radius: 22px;
     }
 
     .slider:before {
       position: absolute;
       content: "";
-      height: 14px;
-      width: 14px;
-      left: 3px;
-      bottom: 3px;
-      background-color: white;
-      transition: .4s;
+      height: 16px;
+      width: 16px;
+      left: 2px;
+      bottom: 2px;
+      background-color: rgba(255, 255, 255, 0.5);
+      transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+        background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+        box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
       border-radius: 50%;
     }
 
     input:checked+.slider {
-      background-color: #4CAF50;
+      background-color: #fff;
+      border-color: #fff;
     }
 
     input:checked+.slider:before {
-      transform: translateX(14px);
+      transform: translateX(16px);
+      background-color: #000;
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
     }
 
-    /* Slider Customization */
+    /* ── Range Slider ── */
     input[type=range] {
-      accent-color: white;
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: #1a1a1a;
+      border-radius: 4px;
+      outline: none;
       cursor: pointer;
+      margin-top: 12px;
+      transition: background 0.3s ease;
     }
 
-    /* Collapsible Theme List */
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+      transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    input[type=range]::-webkit-slider-thumb:hover {
+      box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.12);
+      transform: scale(1.1);
+    }
+
+    input[type=range]:active::-webkit-slider-thumb {
+      box-shadow: 0 0 0 8px rgba(255, 255, 255, 0.15);
+      transform: scale(1.15);
+    }
+
+    /* ── Dimmer Header Row ── */
+    .dimmer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .dimmer-value {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.35);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      min-width: 28px;
+      text-align: right;
+    }
+
+    /* ── Collapsible Sections ── */
+    .collapsible-header {
+      padding: 0;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .collapsible-header .arrow {
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.25);
+      transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+        color 0.15s ease;
+      display: inline-block;
+    }
+
+    .collapsible-header:hover .arrow {
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .collapsible-header.open .arrow {
+      transform: rotate(180deg);
+    }
+
+    /* ── Theme List ── */
     #theme-list {
       max-height: 0;
       overflow: hidden;
-      transition: max-height 0.3s ease-out;
+      opacity: 0;
+      transition: max-height 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+        padding 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+      padding: 0;
     }
 
     #theme-list.open {
       max-height: 300px;
-      /* Adjust based on content */
-      overflow-y: auto;
-      padding: 0 10px 10px 10px;
-      border-top: 1px solid #333;
+      opacity: 1;
+      padding-top: 10px;
     }
 
-    /* Dimmer Sites List */
+    .theme-item {
+      display: flex;
+      align-items: center;
+      padding: 8px 0;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      gap: 10px;
+    }
+
+    .theme-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .theme-item.selected {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .theme-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255, 255, 255, 0.15);
+      flex-shrink: 0;
+      transition: border-color 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .theme-item.selected .theme-swatch {
+      border-color: rgba(255, 255, 255, 0.5);
+      box-shadow: 0 0 6px rgba(255, 255, 255, 0.15);
+    }
+
+    .theme-name {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.55);
+      font-weight: 500;
+      transition: color 0.25s ease;
+    }
+
+    .theme-item.selected .theme-name {
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .theme-check {
+      margin-left: auto;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      opacity: 0;
+      transform: scale(0.5);
+      transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .theme-item.selected .theme-check {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* ── Dimmer Sites List ── */
     #dimmer-sites-list {
       max-height: 0;
       overflow: hidden;
-      transition: max-height 0.3s ease-out;
+      opacity: 0;
+      transition: max-height 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+        padding 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+      padding: 0;
     }
 
     #dimmer-sites-list.open {
-      max-height: 200px;
+      max-height: 155px;
       overflow-y: auto;
-      padding: 0 10px 10px 10px;
-      border-top: 1px solid #333;
+      opacity: 1;
+      padding-top: 10px;
     }
 
-    .dimmer-site-item {
-      display: flex;
-      justify-content: space-between;
+    #dimmer-sites-list::-webkit-scrollbar {
+      width: 2px;
+    }
+
+    #dimmer-sites-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    #dimmer-sites-list::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+    }
+
+    /* ── Site List Items (grid for aligned columns) ── */
+    .site-item {
+      display: grid;
+      grid-template-columns: 1fr 30px 50px 18px;
       align-items: center;
-      padding: 6px 8px;
-      background-color: transparent;
-      border-radius: 4px;
-      font-size: 12px;
-      transition: background-color 0.2s, opacity 0.3s, transform 0.3s;
+      gap: 4px;
+      padding: 6px 0;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.5);
+      transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+        transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    .dimmer-site-item:hover {
-      background-color: #333;
-    }
-
-    .dimmer-site-item.removing {
+    .site-item.removing {
       opacity: 0;
-      transform: translateX(20px);
+      transform: translateX(20px) scale(0.95);
     }
 
-    .dimmer-site-delete {
+    .site-domain {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: rgba(255, 255, 255, 0.55);
+      font-weight: 500;
+    }
+
+    .site-dimmer {
+      text-align: right;
+      color: rgba(255, 255, 255, 0.3);
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+    }
+
+    .site-dm {
+      text-align: right;
+      font-weight: 600;
+      font-size: 9px;
+      letter-spacing: 0.03em;
+    }
+
+    .site-dm.on {
+      color: rgba(255, 255, 255, 0.65);
+    }
+
+    .site-dm.off {
+      color: rgba(255, 255, 255, 0.2);
+    }
+
+    .site-delete {
       background: none;
       border: none;
-      color: #888;
+      color: rgba(255, 255, 255, 0.15);
       cursor: pointer;
-      font-size: 14px;
-      padding: 2px 6px;
-      border-radius: 3px;
-      transition: color 0.2s, background-color 0.2s;
+      font-size: 13px;
+      padding: 0;
+      text-align: center;
+      line-height: 1;
+      transition: color 0.25s ease;
     }
 
-    .dimmer-site-delete:hover {
-      color: #ff6b6b;
-      background-color: rgba(255, 107, 107, 0.1);
+    .site-delete:hover {
+      color: #ff4444;
     }
 
-    /* Easter Egg */
+    .empty-message {
+      padding: 10px 0;
+      color: rgba(255, 255, 255, 0.2);
+      font-size: 11px;
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* ── Separator ── */
+    .section-divider {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.04);
+      margin: 4px 14px 8px;
+    }
+
+    /* ── Easter Egg ── */
     .easter-egg {
       position: fixed;
-      background: rgba(0, 0, 0, 0.8);
-      color: #fff;
-      padding: 5px 10px;
-      border-radius: 4px;
-      font-size: 12px;
+      background: rgba(10, 10, 10, 0.9);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      color: rgba(255, 255, 255, 0.7);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 500;
       pointer-events: none;
-      animation: fadeOut 2s forwards;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      animation: eggFloat 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
       z-index: 1000;
       white-space: nowrap;
     }
 
-    @keyframes fadeOut {
+    @keyframes eggFloat {
       0% {
+        opacity: 0;
+        transform: translateY(4px) scale(0.95);
+      }
+
+      15% {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
       }
 
       70% {
         opacity: 1;
-        transform: translateY(-5px);
+        transform: translateY(-6px);
       }
 
       100% {
         opacity: 0;
-        transform: translateY(-10px);
+        transform: translateY(-14px) scale(0.9);
       }
     }
   </style>
 </head>
 
 <body>
-  <div class="menu-item" id="toggle-item">
+  <!-- Dark Mode Toggle -->
+  <div class="menu-item" id="toggle-item" style="cursor: pointer;">
     <div class="toggle-row">
       <span class="label">Dark Mode</span>
       <label class="switch">
@@ -207,30 +443,31 @@
     <span class="shortcut">Shift + X</span>
   </div>
 
+  <!-- Dimmer -->
   <div class="menu-item" id="dimmer-section">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="dimmer-header">
       <span class="label">Dimmer</span>
-      <span id="dimmer-value" style="font-size: 12px; color: #888;">0%</span>
+      <span class="dimmer-value" id="dimmer-value">0%</span>
     </div>
-    <input type="range" id="dimmer-slider" min="0" max="90" value="0" style="width: 100%; margin-top: 10px;">
+    <input type="range" id="dimmer-slider" min="0" max="90" value="0">
   </div>
 
-  <div class="menu-item" id="themes-section" style="padding: 0;">
-    <div id="themes-header" style="padding: 10px; cursor: pointer;">
-      <span class="label" style="display: block; width: 100%;">Themes (click to select)</span>
+  <!-- Themes -->
+  <div class="menu-item" id="themes-section">
+    <div class="collapsible-header" id="themes-header">
+      <span class="label">Themes</span>
+      <span class="arrow">▼</span>
     </div>
-    <div id="theme-list" style="display: flex; flex-direction: column; gap: 5px;">
-      <!-- Populated by JS -->
-    </div>
+    <div id="theme-list"></div>
   </div>
 
-  <div class="menu-item" id="dimmer-sites-section" style="padding: 0;">
-    <div id="dimmer-sites-header" style="padding: 10px; cursor: pointer;">
-      <span class="label" style="display: block; width: 100%;">Dimmed Sites &#9660;</span>
+  <!-- Dimmed Sites -->
+  <div class="menu-item" id="dimmer-sites-section">
+    <div class="collapsible-header" id="dimmer-sites-header">
+      <span class="label">Sites</span>
+      <span class="arrow">▼</span>
     </div>
-    <div id="dimmer-sites-list" style="display: flex; flex-direction: column; gap: 5px;">
-      <!-- Populated by JS -->
-    </div>
+    <div id="dimmer-sites-list"></div>
   </div>
 
   <script src="themes.js"></script>

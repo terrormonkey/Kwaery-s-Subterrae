@@ -4,62 +4,79 @@ if (window.hasTerrorDarkMode) {
 } else {
     window.hasTerrorDarkMode = true;
 
-    // THEMES are now loaded from themes.js
-
-    // Pre-compiled Regex
+    // ── Pre-compiled Constants ──
     const RGB_REGEX = /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([0-9.]+))?\)/;
+    const SKIP_TAGS = new Set([
+        'SCRIPT', 'STYLE', 'LINK', 'META', 'HEAD',
+        'NOSCRIPT', 'TEMPLATE', 'SVG', 'PATH', 'DEFS'
+    ]);
+    const INPUT_TAGS = new Set(['INPUT', 'TEXTAREA']);
+    const WALKER_FILTER = {
+        acceptNode(node) {
+            return SKIP_TAGS.has(node.tagName)
+                ? NodeFilter.FILTER_REJECT
+                : NodeFilter.FILTER_ACCEPT;
+        }
+    };
 
-    // SAFETY MECHANISM: Prevent page from being stuck hidden forever
+    const brightenCache = new Map();
+    const BRIGHTEN_CACHE_MAX = 512;
+    const IS_WIKIPEDIA = window.location.hostname.includes('wikipedia.org');
+    const ROOT_DOMAIN = getRootDomain(window.location.hostname);
+
+    // ── Safety Timeout ──
     setTimeout(() => {
         if (!document.documentElement.dataset.smartDarkReady) {
             document.documentElement.dataset.smartDarkReady = 'true';
         }
     }, 3000);
 
-    let isEnabled = true; // Assume enabled if running (injected dynamically)
+    // ── State ──
+    let isEnabled = false;
     let observer = null;
-    let currentThemeKey = 'dark-gray';
+    let currentThemeKey = 'obsidian';
     let processingQueue = new Set();
     let isProcessing = false;
     let nodesProcessed = 0;
+    let isApplying = false;
 
-    // Dimmer State
+    let cachedThemeColor = '#1A1A1B';
+    let cachedThemeType = 'dark';
+
+    function updateThemeCache() {
+        const t = THEMES[currentThemeKey];
+        cachedThemeColor = t ? t.color : '#121212';
+        cachedThemeType = t ? t.type : 'dark';
+    }
+
+    // ── Dimmer State ──
     let dimmerOverlay = null;
     let currentDimmerOpacity = 0;
 
-    // Extract root domain from hostname (e.g., en.wikipedia.org -> wikipedia.org)
+    // ── Domain Utility ──
     function getRootDomain(hostname) {
         const parts = hostname.split('.');
-        // Handle cases like co.uk, com.br etc.
-        const knownTLDs = ['co.uk', 'com.br', 'co.jp', 'com.au', 'co.nz', 'org.uk'];
+        const knownTLDs = new Set(['co.uk', 'com.br', 'co.jp', 'com.au', 'co.nz', 'org.uk']);
         const lastTwo = parts.slice(-2).join('.');
-        if (knownTLDs.includes(lastTwo) && parts.length > 2) {
-            return parts.slice(-3).join('.');
-        }
-        // Standard case: return last two parts
-        if (parts.length >= 2) {
-            return parts.slice(-2).join('.');
-        }
-        return hostname;
+        if (knownTLDs.has(lastTwo) && parts.length > 2) return parts.slice(-3).join('.');
+        return parts.length >= 2 ? parts.slice(-2).join('.') : hostname;
     }
 
-    // Initial setup - get theme preferences
+    // ── Initialization (per-site) ──
     chrome.storage.local.get({
-        theme: 'dark-gray',
-        globalEnabled: false,
-        dimmerSites: {}
+        theme: 'obsidian',
+        siteSettings: {}
     }, (items) => {
-        // ALWAYS apply domain-specific dimmer regardless of globalEnabled
-        const rootDomain = getRootDomain(window.location.hostname);
-        const domainOpacity = items.dimmerSites[rootDomain] || 0;
+        const siteConfig = items.siteSettings[ROOT_DOMAIN] || { dimmer: 0, darkMode: false };
 
-        // Create overlay immediately and apply opacity
+        // Always apply dimmer
         createDimmerOverlay();
-        setDimmer(domainOpacity, false); // false = don't save, just apply
+        setDimmer(siteConfig.dimmer || 0, false);
 
-        // Only enable Dark Mode logic if locally enabled
-        if (items.globalEnabled) {
+        // Per-site dark mode
+        if (siteConfig.darkMode) {
             currentThemeKey = items.theme;
+            updateThemeCache();
             enableDarkMode();
         } else {
             isEnabled = false;
@@ -67,142 +84,115 @@ if (window.hasTerrorDarkMode) {
         }
     });
 
-    // Listen for messages from background script
+    // ── Message Listener ──
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'ENABLE') {
-            chrome.storage.local.get(['theme', 'dimmerSites'], (items) => {
-                currentThemeKey = items.theme || 'dark-gray';
-                const rootDomain = getRootDomain(window.location.hostname);
-                const domainOpacity = (items.dimmerSites || {})[rootDomain] || 0;
-                setDimmer(domainOpacity, false);
+            chrome.storage.local.get(['theme', 'siteSettings'], (items) => {
+                currentThemeKey = items.theme || 'obsidian';
+                updateThemeCache();
+                const siteConfig = (items.siteSettings || {})[ROOT_DOMAIN] || {};
+                setDimmer(siteConfig.dimmer || 0, false);
                 enableDarkMode();
             });
         } else if (request.action === 'DISABLE') {
             disableDarkMode();
         } else if (request.action === 'SET_DIMMER') {
-            setDimmer(request.value, true); // true = save to storage
+            setDimmer(request.value, true);
         } else if (request.action === 'GET_DIMMER') {
-            sendResponse({ opacity: currentDimmerOpacity, domain: getRootDomain(window.location.hostname) });
-            return true; // Keep channel open for async response
+            sendResponse({ opacity: currentDimmerOpacity, domain: ROOT_DOMAIN });
+            return true;
         }
     });
 
-    // Also listen for storage changes to update theme immediately
+    // ── Storage Change Listener ──
     chrome.storage.onChanged.addListener((changes, area) => {
-        if (area === 'local') {
-            if (changes.theme && isEnabled) {
-                disableDarkMode();
-                currentThemeKey = changes.theme.newValue;
-                isEnabled = true;
-                enableDarkMode();
+        if (area !== 'local') return;
+
+        if (changes.theme && isEnabled) {
+            disableDarkMode();
+            currentThemeKey = changes.theme.newValue;
+            updateThemeCache();
+            isEnabled = true;
+            enableDarkMode();
+        }
+
+        if (changes.siteSettings) {
+            const oldConfig = (changes.siteSettings.oldValue || {})[ROOT_DOMAIN] || { dimmer: 0, darkMode: false };
+            const newConfig = (changes.siteSettings.newValue || {})[ROOT_DOMAIN] || { dimmer: 0, darkMode: false };
+
+            // Dimmer changed
+            if ((oldConfig.dimmer || 0) !== (newConfig.dimmer || 0)) {
+                setDimmer(newConfig.dimmer || 0, false);
             }
-            if (changes.dimmerSites) {
-                // Check if our domain's opacity changed
-                const rootDomain = getRootDomain(window.location.hostname);
-                const oldValue = (changes.dimmerSites.oldValue || {})[rootDomain] || 0;
-                const newValue = (changes.dimmerSites.newValue || {})[rootDomain] || 0;
-                if (oldValue !== newValue) {
-                    setDimmer(newValue, false);
-                }
-            }
+
+            // Dark mode changed (handled via ENABLE/DISABLE messages from background)
         }
     });
 
-    // Dimmer Logic
+    // ── Dimmer ──
     function createDimmerOverlay() {
         if (dimmerOverlay) return;
-
         dimmerOverlay = document.createElement('div');
         dimmerOverlay.id = 'terror-dimmer-overlay';
-        Object.assign(dimmerOverlay.style, {
-            position: 'fixed',
-            top: '0',
-            left: '0',
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'black',
-            opacity: '0',
-            pointerEvents: 'none',
-            zIndex: '2147483646',
-            transition: 'opacity 0.1s ease',
-            display: 'block'
-        });
+        dimmerOverlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:black;opacity:0;pointer-events:none;z-index:2147483646;transition:opacity .1s ease;display:block';
         document.documentElement.appendChild(dimmerOverlay);
     }
 
-    function setDimmer(opacity, saveToStorage = false) {
+    function setDimmer(opacity, saveToStorage) {
         if (!dimmerOverlay) createDimmerOverlay();
         currentDimmerOpacity = opacity;
-        // If opacity is 0, we can hide it or just set opacity 0
         dimmerOverlay.style.opacity = opacity;
-        dimmerOverlay.style.display = 'block';
-        // Ensure it's in the DOM if re-added
         if (!document.documentElement.contains(dimmerOverlay)) {
             document.documentElement.appendChild(dimmerOverlay);
         }
-
-        // Save to domain-specific storage
         if (saveToStorage) {
-            const rootDomain = getRootDomain(window.location.hostname);
-            chrome.storage.local.get({ dimmerSites: {} }, (items) => {
-                const sites = items.dimmerSites;
-                if (opacity > 0) {
-                    sites[rootDomain] = opacity;
-                } else {
-                    delete sites[rootDomain];
+            chrome.storage.local.get({ siteSettings: {} }, (items) => {
+                const settings = items.siteSettings;
+                if (!settings[ROOT_DOMAIN]) {
+                    settings[ROOT_DOMAIN] = { dimmer: 0, darkMode: false };
                 }
-                chrome.storage.local.set({ dimmerSites: sites });
+                settings[ROOT_DOMAIN].dimmer = opacity;
+
+                // Clean up if both are off
+                if (!settings[ROOT_DOMAIN].darkMode && opacity === 0) {
+                    delete settings[ROOT_DOMAIN];
+                }
+
+                chrome.storage.local.set({ siteSettings: settings });
             });
         }
     }
 
-    // Logic Functions
-
-    function getThemeColor() {
-        return THEMES[currentThemeKey] ? THEMES[currentThemeKey].color : '#121212';
+    // ── Color Analysis ──
+    function parseColor(color) {
+        const m = color.match(RGB_REGEX);
+        if (!m) return null;
+        return {
+            r: m[1] | 0,
+            g: m[2] | 0,
+            b: m[3] | 0,
+            a: m[4] !== undefined ? +m[4] : 1,
+            brightness: ((m[1] | 0) * 299 + (m[2] | 0) * 587 + (m[3] | 0) * 114) / 1000
+        };
     }
 
-    function getThemeType() {
-        return THEMES[currentThemeKey] ? THEMES[currentThemeKey].type : 'dark';
-    }
-
-    function isBright(color) {
-        const match = color.match(RGB_REGEX);
-        if (!match) return false;
-
-        // Check Alpha
-        if (match[4] !== undefined) {
-            const alpha = parseFloat(match[4]);
-            if (alpha < 0.1) return false; // Too transparent to matter
-        }
-
-        const r = parseInt(match[1]);
-        const g = parseInt(match[2]);
-        const b = parseInt(match[3]);
-        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-        return brightness > 128;
-    }
-
-    function isDark(color) {
-        const match = color.match(RGB_REGEX);
-        if (!match) return false;
-        const r = parseInt(match[1]);
-        const g = parseInt(match[2]);
-        const b = parseInt(match[3]);
-        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-        return brightness < 128;
+    function hue2rgb(p, q, t) {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1 / 6) return p + (q - p) * 6 * t;
+        if (t < 1 / 2) return q;
+        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+        return p;
     }
 
     function smartBrighten(color) {
-        const match = color.match(RGB_REGEX);
-        if (!match) return color;
-        let r = parseInt(match[1]);
-        let g = parseInt(match[2]);
-        let b = parseInt(match[3]);
+        const cached = brightenCache.get(color);
+        if (cached) return cached;
 
-        r /= 255;
-        g /= 255;
-        b /= 255;
+        const m = color.match(RGB_REGEX);
+        if (!m) return color;
+
+        let r = (m[1] | 0) / 255, g = (m[2] | 0) / 255, b = (m[3] | 0) / 255;
         const max = Math.max(r, g, b), min = Math.min(r, g, b);
         let h, s, l = (max + min) / 2;
 
@@ -211,32 +201,18 @@ if (window.hasTerrorDarkMode) {
         } else {
             const d = max - min;
             s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-            switch (max) {
-                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-                case g: h = (b - r) / d + 2; break;
-                case b: h = (r - g) / d + 4; break;
-            }
+            if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+            else if (max === g) h = (b - r) / d + 2;
+            else h = (r - g) / d + 4;
             h /= 6;
         }
 
-        if (s > 0) {
-            if (l < 0.6) {
-                l = 0.7;
-            }
-        }
+        if (s > 0 && l < 0.6) l = 0.7;
 
         let r1, g1, b1;
         if (s === 0) {
             r1 = g1 = b1 = l;
         } else {
-            const hue2rgb = (p, q, t) => {
-                if (t < 0) t += 1;
-                if (t > 1) t -= 1;
-                if (t < 1 / 6) return p + (q - p) * 6 * t;
-                if (t < 1 / 2) return q;
-                if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-                return p;
-            };
             const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
             const p = 2 * l - q;
             r1 = hue2rgb(p, q, h + 1 / 3);
@@ -244,107 +220,71 @@ if (window.hasTerrorDarkMode) {
             b1 = hue2rgb(p, q, h - 1 / 3);
         }
 
-        return `rgb(${Math.round(r1 * 255)}, ${Math.round(g1 * 255)}, ${Math.round(b1 * 255)})`;
+        const result = `rgb(${Math.round(r1 * 255)}, ${Math.round(g1 * 255)}, ${Math.round(b1 * 255)})`;
+        if (brightenCache.size >= BRIGHTEN_CACHE_MAX) {
+            brightenCache.delete(brightenCache.keys().next().value);
+        }
+        brightenCache.set(color, result);
+        return result;
     }
 
-    function calculateChange(element) {
-        if (!isEnabled) return null;
+    // ── Core Processing ──
+    function processElement(element) {
+        if (!isEnabled) return;
 
-        // Wikipedia Search Bar Exclusion: User requested to leave it white/ignored.
-        if (window.location.hostname.includes('wikipedia.org')) {
-            if (element.tagName === 'INPUT' && (element.type === 'search' || element.name === 'search')) {
-                return null;
-            }
-        }
-
-        if (element.tagName === 'SCRIPT' || element.tagName === 'STYLE' || element.tagName === 'LINK') return null;
+        const tag = element.tagName;
+        if (IS_WIKIPEDIA && tag === 'INPUT' && (element.type === 'search' || element.name === 'search')) return;
+        if (SKIP_TAGS.has(tag)) return;
 
         const computed = window.getComputedStyle(element);
         const bgColor = computed.backgroundColor;
-        const color = computed.color;
+        const textColor = computed.color;
 
         if (element.dataset.smartDarkProcessed) {
-            // Integrity Check: If we processed it, it should be dark (or transparent).
-            // If it is now Bright and Opaque, it means external JS reset it.
-            // We must re-process it.
-            const isTrans = bgColor === 'rgba(0, 0, 0, 0)' || bgColor === 'transparent';
-            if (!isTrans && isBright(bgColor)) {
-                // Fall through to re-process
-            } else {
-                return null; // Integrity Verified
-            }
-        }
-
-        const updates = {};
-        const datasetUpdates = {};
-        const themeType = getThemeType();
-
-        const isTransparent = bgColor === 'rgba(0, 0, 0, 0)' || bgColor === 'transparent';
-        const isInput = element.tagName === 'INPUT' || element.tagName === 'TEXTAREA';
-
-        if ((!isTransparent && isBright(bgColor)) || (isInput && isBright(bgColor))) {
-            // Bright background logic
-            datasetUpdates.originalBg = element.style.backgroundColor;
-            updates.backgroundColor = getThemeColor();
-            // Ensure inputs don't keep white gradients/images
-            if (isInput) updates.backgroundImage = 'none';
-            datasetUpdates.smartDarkProcessed = 'true';
-        } else if (!isTransparent && isDark(bgColor)) {
-            datasetUpdates.smartDarkProcessed = 'true';
-        }
-
-        // Text Color Logic
-        if (isDark(color)) {
-            // If theme is DARK: brighten dark text.
-            // If theme is LIGHT: keep dark text.
-            if (themeType === 'dark') {
-                datasetUpdates.originalColor = element.style.color;
-
-                const match = color.match(RGB_REGEX);
-                let isNeutral = true;
-                if (match) {
-                    const r = parseInt(match[1]);
-                    const g = parseInt(match[2]);
-                    const b = parseInt(match[3]);
-                    if (Math.abs(r - g) > 10 || Math.abs(r - b) > 10 || Math.abs(g - b) > 10) {
-                        isNeutral = false;
-                    }
-                }
-
-                if (isNeutral) {
-                    updates.color = '#e0e0e0';
+            const isTransparent = bgColor === 'rgba(0, 0, 0, 0)' || bgColor === 'transparent';
+            if (!isTransparent) {
+                const bgParsed = parseColor(bgColor);
+                if (bgParsed && bgParsed.brightness > 128 && bgParsed.a >= 0.1) {
+                    // External JS reset — re-process
                 } else {
-                    updates.color = smartBrighten(color);
+                    return;
                 }
-                datasetUpdates.smartDarkProcessed = 'true';
             } else {
-                // Light Theme: Dark text is acceptable, no changes required.
-                datasetUpdates.smartDarkProcessed = 'true';
+                return;
             }
         }
 
-        // Dimmer overlay provides uniform dimming across all content.
+        const bgParsed = parseColor(bgColor);
+        const textParsed = parseColor(textColor);
+        const isTransparent = bgColor === 'rgba(0, 0, 0, 0)' || bgColor === 'transparent';
+        const isInput = INPUT_TAGS.has(tag);
+        let hasUpdates = false;
 
-        if (Object.keys(updates).length > 0 || Object.keys(datasetUpdates).length > 0) {
-            return { element, updates, datasetUpdates };
+        if (bgParsed && bgParsed.a >= 0.1) {
+            if ((!isTransparent && bgParsed.brightness > 128) || (isInput && bgParsed.brightness > 128)) {
+                element.dataset.originalBg = element.style.backgroundColor;
+                element.style.setProperty('background-color', cachedThemeColor, 'important');
+                if (isInput) element.style.setProperty('background-image', 'none', 'important');
+                hasUpdates = true;
+            }
         }
-        return null;
+
+        if (textParsed && textParsed.brightness < 128) {
+            if (cachedThemeType === 'dark') {
+                element.dataset.originalColor = element.style.color;
+                const { r, g, b } = textParsed;
+                const isNeutral = Math.abs(r - g) <= 10 && Math.abs(r - b) <= 10 && Math.abs(g - b) <= 10;
+                element.style.setProperty('color', isNeutral ? '#e0e0e0' : smartBrighten(textColor), 'important');
+                hasUpdates = true;
+            }
+        }
+
+        if (hasUpdates || (bgParsed && !isTransparent)) {
+            element.dataset.smartDarkProcessed = 'true';
+        }
     }
 
-    function applyChange(change) {
-        if (!change) return;
-        const { element, updates, datasetUpdates } = change;
-
-        for (const [key, value] of Object.entries(datasetUpdates)) {
-            element.dataset[key] = value;
-        }
-        for (const [key, value] of Object.entries(updates)) {
-            // Convert camelCase to kebab-case for setProperty
-            const cssProperty = key.replace(/([A-Z])/g, '-$1').toLowerCase();
-            element.style.setProperty(cssProperty, value, 'important');
-        }
-    }
-
+    // ── Queue Processing ──
     function scheduleProcessing() {
         if (isProcessing) return;
         isProcessing = true;
@@ -353,68 +293,31 @@ if (window.hasTerrorDarkMode) {
 
     function processQueue() {
         const startTime = performance.now();
-        const MaxExecutionTimeMs = 8; // Max 8ms per frame to leave room for other things
+        const budget = 10;
+        let timeCheck = 0;
+        isApplying = true;
 
         while (processingQueue.size > 0) {
-            // Pick next item
             const [el] = processingQueue;
             processingQueue.delete(el);
+            if (!document.contains(el)) continue;
 
-            if (!document.contains(el)) continue; // optimization if removed
-
-            // Process subtree
-            const filter = {
-                acceptNode: function (node) {
-                    const tag = node.tagName;
-                    if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'LINK' ||
-                        tag === 'META' || tag === 'HEAD' || tag === 'NOSCRIPT' ||
-                        tag === 'TEMPLATE' || tag === 'SVG' || tag === 'PATH' || tag === 'DEFS') {
-                        return NodeFilter.FILTER_REJECT;
-                    }
-                    return NodeFilter.FILTER_ACCEPT;
-                }
-            };
-
-            // To be time-sliced efficiently, we can't do the whole subtree at once if it's huge.
-            // But TreeWalker is sync.
-            // Compromise: We use TreeWalker, but we check time every N nodes.
-            // If we run out of time, we must PAUSE.
-            // Pause means: Save the current walker state (node) and Resume next frame?
-            // TreeWalker doesn't support "saving" easily other than keeping the instance.
-            // For now, let's just process the QUEUE items time-sliced, but for each item (subtree),
-            // we do it fully unless it's huge?
-            // If `el` is `document.body`, that's huge.
-
-            // Better Approach:
-            // When we start a walker on `el`, we push the WALKER to a secondary queue or stack.
-            // We consume from that walker until done or time up.
-
-            // NOTE: Changing local implementation to support this.
-
-            if (!el.walker) {
-                el.walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT, filter);
-                // Process the root itself first
-                const rootChange = calculateChange(el);
-                if (rootChange) applyChange(rootChange);
+            if (!el._walker) {
+                el._walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT, WALKER_FILTER);
+                processElement(el);
                 nodesProcessed++;
             }
 
-            const walker = el.walker;
+            const walker = el._walker;
             let finished = false;
 
             while (true) {
-                if (performance.now() - startTime > MaxExecutionTimeMs) {
-                    // Time up. Put el back in queue (at start or end? Start is better to finish it)
+                if ((++timeCheck & 7) === 0 && performance.now() - startTime > budget) {
                     processingQueue.add(el);
-                    // But Set insertion order... we need to ensure it's picked up next.
-                    // Set iterates in insertion order. If we add it again, it goes to the end.
-                    // That's actually fine aka "Round Robin".
-                    break; // Time up
+                    break;
                 }
-
                 if (walker.nextNode()) {
-                    const change = calculateChange(walker.currentNode);
-                    if (change) applyChange(change);
+                    processElement(walker.currentNode);
                     nodesProcessed++;
                 } else {
                     finished = true;
@@ -422,156 +325,131 @@ if (window.hasTerrorDarkMode) {
                 }
             }
 
-            if (finished) {
-                // Done with this element
-                delete el.walker;
-                // processingQueue deleted it at top of loop
-            } else {
-                // Not finished, loop broke due to time.
-                // We re-added it effectively by `processingQueue.add(el)`?
-                // Wait, if I deleted it, `add` puts it at the END.
-                // That's acceptable.
-            }
+            if (finished) delete el._walker;
 
-            // Check if we can show the page (curtain removal)
-            // Increased threshold from 800 to 2500 based on user feedback to prevent any white flash.
             if (!document.documentElement.dataset.smartDarkReady && nodesProcessed > 2500) {
-                // Wrap in double rAF to ensure paint allows the style updates to render behind the curtain
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                        document.documentElement.dataset.smartDarkReady = 'true';
-                    });
-                });
+                requestAnimationFrame(() => requestAnimationFrame(() => {
+                    document.documentElement.dataset.smartDarkReady = 'true';
+                }));
             }
 
-            if (performance.now() - startTime > MaxExecutionTimeMs) {
-                break; // Stop outer loop too
-            }
+            if ((timeCheck & 7) === 0 && performance.now() - startTime > budget) break;
         }
+
+        isApplying = false;
 
         if (processingQueue.size > 0) {
             isProcessing = true;
             requestAnimationFrame(processQueue);
         } else {
             isProcessing = false;
-            // Queue empty, definitely ready
             if (!document.documentElement.dataset.smartDarkReady) {
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                        document.documentElement.dataset.smartDarkReady = 'true';
-                    });
-                });
+                requestAnimationFrame(() => requestAnimationFrame(() => {
+                    document.documentElement.dataset.smartDarkReady = 'true';
+                }));
             }
         }
     }
 
     function processNode(node) {
-        if (node.nodeType === 1) { // ELEMENT_NODE
+        if (node.nodeType === 1) {
             processingQueue.add(node);
             scheduleProcessing();
         }
     }
 
+    // ── Enable / Disable ──
     function enableDarkMode() {
         if (!isEnabled) isEnabled = true;
-
-        // Reset state for clean switch
         nodesProcessed = 0;
-        delete document.documentElement.dataset.smartDarkReady; // Engage curtain
+        brightenCache.clear();
+        delete document.documentElement.dataset.smartDarkReady;
 
-        // Remove processed flags to force re-calculation
         const processed = document.querySelectorAll('[data-smart-dark-processed="true"]');
-        if (processed.length > 0) {
-            processed.forEach(el => delete el.dataset.smartDarkProcessed);
-        }
+        for (let i = 0; i < processed.length; i++) delete processed[i].dataset.smartDarkProcessed;
 
-        // Apply Global Defaults
         document.documentElement.dataset.originalBg = document.documentElement.style.backgroundColor;
-        document.documentElement.style.backgroundColor = getThemeColor();
+        document.documentElement.style.backgroundColor = cachedThemeColor;
         document.documentElement.style.colorScheme = 'dark';
 
         const updateBody = () => {
             if (document.body) {
-                // Ensure body is covered
                 if (!document.body.dataset.originalBg) {
                     document.body.dataset.originalBg = document.body.style.backgroundColor;
                 }
-                document.body.style.backgroundColor = getThemeColor();
-
-                // Re-ensure dimmer overlay is properly attached and visible
-                if (currentDimmerOpacity > 0) {
-                    setDimmer(currentDimmerOpacity, false);
-                }
-
+                document.body.style.backgroundColor = cachedThemeColor;
+                if (currentDimmerOpacity > 0) setDimmer(currentDimmerOpacity, false);
                 processNode(document.body);
                 startObserver();
             }
         };
 
-        if (document.body) {
-            updateBody();
-        } else {
-            document.addEventListener('DOMContentLoaded', updateBody);
-        }
+        if (document.body) updateBody();
+        else document.addEventListener('DOMContentLoaded', updateBody);
     }
 
     function startObserver() {
-        if (!observer && document.body) {
-            observer = new MutationObserver((mutations) => {
-                if (!isEnabled) return;
-                mutations.forEach((mutation) => {
-                    mutation.addedNodes.forEach((node) => {
-                        processNode(node);
-                    });
-                });
-            });
+        if (observer || !document.body) return;
 
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true,
-                attributes: true,
-                attributeFilter: ['style', 'class']
-            });
-        }
+        let pendingNodes = [];
+        let mutationTimer = 0;
+
+        observer = new MutationObserver((mutations) => {
+            if (!isEnabled || isApplying) return;
+            for (let i = 0; i < mutations.length; i++) {
+                const added = mutations[i].addedNodes;
+                for (let j = 0; j < added.length; j++) {
+                    if (added[j].nodeType === 1) pendingNodes.push(added[j]);
+                }
+            }
+            if (!mutationTimer) {
+                mutationTimer = requestAnimationFrame(() => {
+                    for (let i = 0; i < pendingNodes.length; i++) processingQueue.add(pendingNodes[i]);
+                    pendingNodes = [];
+                    mutationTimer = 0;
+                    scheduleProcessing();
+                });
+            }
+        });
+
+        observer.observe(document.body, { childList: true, subtree: true });
     }
 
     function disableDarkMode() {
         if (!isEnabled) return;
         isEnabled = false;
 
-        if (observer) {
-            observer.disconnect();
-            observer = null;
-        }
-
+        if (observer) { observer.disconnect(); observer = null; }
         processingQueue.clear();
+        brightenCache.clear();
         document.documentElement.dataset.smartDarkReady = 'true';
 
+        const themeColors = new Set();
+        for (const key in THEMES) themeColors.add(THEMES[key].color);
+
         const processed = document.querySelectorAll('[data-smart-dark-processed="true"]');
-        processed.forEach(el => {
+        for (let i = 0; i < processed.length; i++) {
+            const el = processed[i];
             if (el.dataset.originalBg !== undefined) {
                 el.style.backgroundColor = el.dataset.originalBg;
                 delete el.dataset.originalBg;
-            } else if (el.style.backgroundColor === getThemeColor() || Object.values(THEMES).some(t => t.color === el.style.backgroundColor)) {
+            } else if (themeColors.has(el.style.backgroundColor)) {
                 el.style.backgroundColor = '';
             }
-
             if (el.dataset.originalColor !== undefined) {
                 el.style.color = el.dataset.originalColor;
                 delete el.dataset.originalColor;
             } else if (el.style.color === 'rgb(224, 224, 224)' || el.style.color === '#e0e0e0') {
                 el.style.color = '';
             }
-
             if (el.dataset.originalFilter !== undefined) {
                 el.style.filter = el.dataset.originalFilter;
                 delete el.dataset.originalFilter;
             } else if (el.style.filter === 'brightness(0.8)') {
                 el.style.filter = '';
             }
-
             delete el.dataset.smartDarkProcessed;
-        });
+        }
 
         if (document.documentElement.dataset.originalBg !== undefined) {
             document.documentElement.style.backgroundColor = document.documentElement.dataset.originalBg;
