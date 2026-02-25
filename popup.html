@@ -60,9 +60,9 @@
     .shortcut {
       font-size: 10px;
       color: rgba(255, 255, 255, 0.3);
-      margin-top: 5px;
       letter-spacing: 0.04em;
       font-weight: 500;
+      margin-top: 5px;
     }
 
     .toggle-row {
@@ -164,7 +164,7 @@
     .dimmer-header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: baseline;
     }
 
     .dimmer-value {
@@ -381,6 +381,67 @@
       font-style: italic;
     }
 
+    /* ── Language Selector ── */
+    .lang-options {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .lang-btn {
+      flex: 1;
+      padding: 7px 0;
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+      font-family: inherit;
+      letter-spacing: 0.02em;
+    }
+
+    .lang-btn:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .lang-btn.active {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.2);
+      color: #fff;
+    }
+
+    /* ── Volume Control ── */
+    .volume-section {
+      margin-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      padding-top: 10px;
+    }
+
+    .volume-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .volume-label {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.45);
+      font-weight: 600;
+    }
+
+    .volume-value {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.35);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      min-width: 28px;
+      text-align: right;
+    }
+
     /* ── Separator ── */
     .section-divider {
       height: 1px;
@@ -440,7 +501,7 @@
         <span class="slider"></span>
       </label>
     </div>
-    <span class="shortcut">Shift + X</span>
+    <div class="shortcut">Shift + X</div>
   </div>
 
   <!-- Dimmer -->
@@ -449,7 +510,14 @@
       <span class="label">Dimmer</span>
       <span class="dimmer-value" id="dimmer-value">0%</span>
     </div>
+    <div class="shortcut">Shift + Y</div>
     <input type="range" id="dimmer-slider" min="0" max="90" value="0">
+  </div>
+
+  <!-- Tutorial -->
+  <div class="menu-item" id="tutorial-section" style="cursor: pointer;">
+    <span class="label">Tutorial</span>
+    <div class="shortcut">Shift + T</div>
   </div>
 
   <!-- Themes -->
@@ -458,6 +526,7 @@
       <span class="label">Themes</span>
       <span class="arrow">▼</span>
     </div>
+    <div class="shortcut">Shift + &lt;</div>
     <div id="theme-list"></div>
   </div>
 
@@ -468,6 +537,22 @@
       <span class="arrow">▼</span>
     </div>
     <div id="dimmer-sites-list"></div>
+  </div>
+
+  <!-- Language & Sound -->
+  <div class="menu-item" id="language-section">
+    <span class="label" id="language-label">Language & Sound</span>
+    <div class="lang-options">
+      <button class="lang-btn active" id="lang-en">English</button>
+      <button class="lang-btn" id="lang-de">Deutsch</button>
+    </div>
+    <div class="volume-section">
+      <div class="volume-header">
+        <span class="volume-label" id="volume-label">Volume</span>
+        <span class="volume-value" id="volume-value">40%</span>
+      </div>
+      <input type="range" id="volume-slider" min="0" max="100" value="40">
+    </div>
   </div>
 
   <script src="themes.js"></script>

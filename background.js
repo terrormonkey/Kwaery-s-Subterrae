@@ -121,7 +121,7 @@ function updateVisuals(tabId, isEnabledForSite, installDate, totalActiveTime) {
   });
 
   const status = isEnabledForSite ? "ON" : "OFF";
-  const shortcuts = "Shortcuts:\nShift+X: Toggle\nShift+Y: Dimmer\nShift+<: Colors";
+  const shortcuts = "Shortcuts:\nShift+X: Toggle\nShift+Y: Dimmer\nShift+T: Tutorial\nShift+<: Cycle Theme";
   const stats = `Installed: ${formatDate(installDate)}\nActive: ${formatDuration(totalActiveTime)}`;
   chrome.action.setTitle({
     title: `TerrorDarkmode: ${status}\n\n${shortcuts}\n\n${stats}`,
@@ -210,11 +210,68 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
+// ── Theme Keys (for cycling) ──
+const THEME_KEYS = ['obsidian', 'sandstone', 'midnight-tide', 'black-cherry', 'sunken-reef'];
+
 // ── Message Handler ──
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'TOGGLE_REQUEST' && sender.tab) {
     toggleDarkMode(sender.tab);
   } else if (request.action === 'TOGGLE_FROM_POPUP') {
     toggleDarkMode(null);
+  } else if (request.action === 'CYCLE_THEME') {
+    chrome.storage.local.get({ theme: 'obsidian' }, (data) => {
+      const currentIndex = THEME_KEYS.indexOf(data.theme);
+      const nextIndex = (currentIndex + 1) % THEME_KEYS.length;
+      chrome.storage.local.set({ theme: THEME_KEYS[nextIndex] });
+    });
+  } else if (request.action === 'TUTORIAL_OPENING' && sender.tab) {
+    // Close tutorial on all OTHER tabs
+    chrome.tabs.query({}, (tabs) => {
+      for (const t of tabs) {
+        if (t.id !== sender.tab.id) {
+          chrome.tabs.sendMessage(t.id, { action: 'CLOSE_TUTORIAL' }).catch(() => { });
+        }
+      }
+    });
+  }
+});
+
+// ── Popup Close Sound (via Offscreen Document) ──
+let creatingOffscreen = null;
+
+async function ensureOffscreen() {
+  const contexts = await chrome.runtime.getContexts({
+    contextTypes: ['OFFSCREEN_DOCUMENT']
+  });
+  if (contexts.length > 0) return;
+  if (creatingOffscreen) {
+    await creatingOffscreen;
+  } else {
+    creatingOffscreen = chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: ['AUDIO_PLAYBACK'],
+      justification: 'Playing popup close sound effect'
+    });
+    await creatingOffscreen;
+    creatingOffscreen = null;
+  }
+}
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === 'popup') {
+    port.onDisconnect.addListener(async () => {
+      try {
+        const data = await chrome.storage.local.get({ soundVolumePercent: 30 });
+        const trueVol = (data.soundVolumePercent / 100) * 0.25;
+        if (trueVol <= 0) return;
+        await ensureOffscreen();
+        chrome.runtime.sendMessage({
+          action: 'PLAY_SOUND',
+          file: 'Sounds/17.flac',
+          volume: trueVol
+        }).catch(() => { });
+      } catch (e) { /* ignore */ }
+    });
   }
 });
